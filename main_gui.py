@@ -1,80 +1,85 @@
-import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QToolBar, QAction, QVBoxLayout, QWidget
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
+import tkinter as tk
+import customtkinter as ctk
+import logging
 
-class MainWindow(QMainWindow):
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+class MainWindow(ctk.CTk):
     def __init__(self):
-        super().__init__()
+        super().__init__(fg_color="#2e2e2e")  # Set background color here
 
-        self.setWindowTitle("Dark Themed GUI")
-        self.setGeometry(100, 100, 800, 600)
-        self.setStyleSheet("background-color: #2e2e2e;")
+        # Window Settings
+        self.title("Aztec's Speed-Up & Clean-Up")
+        # Set window size
+        self.geometry("800x600")
 
-        # Create a toolbar
-        toolbar = QToolBar()
-        toolbar.setStyleSheet("background-color: #3e3e3e; border: none;")
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
-        self.addToolBarBreak(Qt.TopToolBarArea)
+        # Button texts
+        self.toolbar_button_texts = ["Help", "Shortcut", "Run", "Cancel", "Exit"]
+        self.tab_button_texts = ["Dashboard", "Tests", "Presets", "Scheduled Presets", "Settings"]
 
-        # Add actions to the toolbar
-        action1 = QAction(QIcon(), "Action 1", self)
-        action2 = QAction(QIcon(), "Action 2", self)
-        toolbar.addAction(action1)
-        toolbar.addAction(action2)
+        # Toolbar Section
+        self.create_toolbar()
 
-        # Create tabs
-        tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane { border: 0; }
-            QTabBar::tab { background: #3e3e3e; color: white; padding: 10px; border-radius: 10px 10px 0 0; min-width: 100px; margin-top: 5px; }
-            QTabBar::tab:selected { background: #5e5e5e; }
-            QTabBar { background: #252525; qproperty-drawBase: 0; border-radius: 15px; margin: 5px; padding: 5px; }
-            QTabWidget>QWidget>QWidget { background: #2e2e2e; }
-        """)
+        # Tab Bar Section
+        self.create_tab_bar()
 
-        # Create tab content
-        tab1 = QWidget()
-        tab2 = QWidget()
-        tab3 = QWidget()
-        tab4 = QWidget()
-        tab5 = QWidget()
-        tabs.addTab(tab1, "Tab 1")
-        tabs.addTab(tab2, "Tab 2")
-        tabs.addTab(tab3, "Tab 3")
-        tabs.addTab(tab4, "Tab 4")
-        tabs.addTab(tab5, "Tab 5")
+        # Show the first tab by default
+        self.show_tab(1)
 
-        # Layout for tab1
-        layout1 = QVBoxLayout()
-        tab1.setLayout(layout1)
+    # Toolbar Section
+    def create_toolbar(self):
+        try:
+            # Set toolbar frame color and size
+            toolbar_frame = ctk.CTkFrame(self, fg_color="#252525", corner_radius=0, height=35)  # Removed rounded corners
+            toolbar_frame.pack(side="top", fill="x", padx=0, pady=0)  # Connect to the top and edges
 
-        # Layout for tab2
-        layout2 = QVBoxLayout()
-        tab2.setLayout(layout2)
+            # Add buttons to the toolbar
+            toolbar_buttons_frame = ctk.CTkFrame(toolbar_frame, fg_color="#252525")
+            toolbar_buttons_frame.pack(padx=10, pady=(5, 5))  # Adjusted pady to increase padding
 
-        # Layout for tab3
-        layout3 = QVBoxLayout()
-        tab3.setLayout(layout3)
+            self.toolbar_buttons = []
+            for i, text in enumerate(self.toolbar_button_texts, start=1):
+                # Set button color and size
+                button = ctk.CTkButton(toolbar_buttons_frame, text=text, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, width=100, height=30)
+                button.pack(side="left", padx=5, pady=5)
+                self.toolbar_buttons.append(button)
 
-        # Layout for tab4
-        layout4 = QVBoxLayout()
-        tab4.setLayout(layout4)
+            toolbar_buttons_frame.place(relx=0.5, rely=0.5, anchor="center")
+        except Exception as e:
+            logging.error(f"Error creating toolbar: {e}")
 
-        # Layout for tab5
-        layout5 = QVBoxLayout()
-        tab5.setLayout(layout5)
+    # Tab Bar Section
+    def create_tab_bar(self):
+        try:
+            # Set tab bar frame color and size
+            self.tab_bar_frame = ctk.CTkFrame(self, fg_color="#3e3e3e", corner_radius=10, height=45)  # Increased height
+            self.tab_bar_frame.pack(side="top", fill="x", padx=10, pady=(15, 10))  # Increased pady top to 15
 
-        # Set central widget
-        central_widget = QWidget()
-        central_layout = QVBoxLayout()
-        central_layout.addWidget(toolbar)
-        central_layout.addWidget(tabs)
-        central_widget.setLayout(central_layout)
-        self.setCentralWidget(central_widget)
+            self.tabs = {}
+            tab_buttons_frame = ctk.CTkFrame(self.tab_bar_frame, fg_color="#3e3e3e")
+            tab_buttons_frame.pack(padx=10, pady=5)
+
+            self.tab_buttons = []
+            for i, text in enumerate(self.tab_button_texts, start=1):
+                # Set tab button color and size
+                tab_button = ctk.CTkButton(tab_buttons_frame, text=text, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, height=35, command=lambda i=i: self.show_tab(i))  # Increased height
+                tab_button.pack(side="left", padx=5, pady=5)
+                self.tab_buttons.append(tab_button)
+
+            tab_buttons_frame.place(relx=0.5, rely=0.5, anchor="center")
+        except Exception as e:
+            logging.error(f"Error creating tab bar: {e}")
+
+    # Tab Management
+    def show_tab(self, tab_index):
+        try:
+            for tab in self.tabs.values():
+                tab.pack_forget()
+            self.tabs[tab_index].pack(fill="both", expand=True, padx=10, pady=10)
+        except Exception as e:
+            logging.error(f"Error showing tab {tab_index}: {e}")
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec_())
+    app = MainWindow()
+    app.mainloop()

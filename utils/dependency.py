@@ -18,7 +18,7 @@ def install_dependency(dependency):
         print(f"Error installing {dependency}: {e}")
 
 def main():
-    dependencies = ["pyqt5"]
+    dependencies = ["tkinter", "customtkinter"]
     for dependency in dependencies:
         if not check_dependency(dependency):
             install_dependency(dependency)
