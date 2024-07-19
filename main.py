@@ -1,12 +1,15 @@
-#IMPORTS
+# main.py
+# IMPORTS
 import subprocess
-from utils import logger
+from utils.logger import setup_logging, finalize_logging, logger
 
-#MAIN
+# MAIN
 def main():
+    setup_logging()
+    logger.debug("Logging setup complete")
     subprocess.call(["python", "utils/dependency.py"])
-    logger.finalize_logging()
+    finalize_logging()
     subprocess.call(["python", "main_gui.py"])
-    
+
 if __name__ == "__main__":
     main()

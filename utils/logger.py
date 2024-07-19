@@ -9,42 +9,50 @@ log_dir = 'Logs'
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
 
-# Set up logging
 log_file = os.path.join(log_dir, 'app.log')
-print(f"Creating log file: {log_file}")
+
+# Create the logger object
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# Create file handler
-file_handler = logging.FileHandler(log_file)
-file_handler.setLevel(logging.DEBUG)
+def setup_logging():
+    print(f"Creating log file: {log_file}")
 
-# Create console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
+    # Check if the logger already has handlers
+    if not logger.handlers:
+        # Create file handler
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
 
-# Color coding for log levels
-class CustomFormatter(logging.Formatter):
-    COLORS = {
-        'DEBUG': '\033[92m',  # Green
-        'INFO': '\033[94m',   # Blue
-        'WARNING': '\033[93m',# Yellow
-        'ERROR': '\033[91m',  # Red
-        'CRITICAL': '\033[95m'# Magenta
-    }
-    RESET = '\033[0m'
+        # Create console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG)
 
-    def format(self, record):
-        log_color = self.COLORS.get(record.levelname, self.RESET)
-        record.msg = f"{log_color}{record.msg}{self.RESET}"
-        return super().format(record)
+        # Color coding for log levels
+        class CustomFormatter(logging.Formatter):
+            COLORS = {
+                'DEBUG': '\033[92m',  # Green
+                'INFO': '\033[94m',   # Blue
+                'WARNING': '\033[93m',# Yellow
+                'ERROR': '\033[91m',  # Red
+                'CRITICAL': '\033[95m'# Magenta
+            }
+            RESET = '\033[0m'
 
-# Apply custom formatter to the console handler
-console_handler.setFormatter(CustomFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+            def format(self, record):
+                log_color = self.COLORS.get(record.levelname, self.RESET)
+                record.msg = f"{log_color}{record.msg}{self.RESET}"
+                return super().format(record)
 
-# Add handlers to the logger
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
+        # Apply custom formatter to the console handler
+        console_handler.setFormatter(CustomFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+        # Apply standard formatter to the file handler
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+        # Add handlers to the logger
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
 
 def close_log_handlers():
     for handler in logger.handlers[:]:
@@ -52,7 +60,7 @@ def close_log_handlers():
         logger.removeHandler(handler)
 
 def finalize_logging():
-    settings_file = 'ettings.json'
+    settings_file = 'settings.json'
     save_logs = False  # Default to disabled
 
     # Check if settings.json exists
@@ -76,8 +84,10 @@ def finalize_logging():
             os.remove(log_file)
 
 # Test the logger
-logger.debug("This is a debug message")
-logger.info("This is an info message")
-logger.warning("This is a warning message")
-logger.error("This is an error message")
-logger.critical("This is a critical message")
+if __name__ == "__main__":
+    setup_logging()
+    logger.debug("This is a debug message")
+    logger.info("This is an info message")
+    logger.warning("This is a warning message")
+    logger.error("This is an error message")
+    logger.critical("This is a critical message")
