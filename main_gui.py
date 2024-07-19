@@ -1,7 +1,8 @@
 import tkinter as tk
 import customtkinter as ctk
-from utils.logger import logger, logging
+from utils.logger import logger, logging, finalize_logging
 import subprocess
+from utils.settings import load_settings, update_settings
 
 # Configure logging
 logger.debug("Starting main GUI")
@@ -44,6 +45,13 @@ class MainWindow(ctk.CTk):
         
         # Create settings tab widgets
         self.create_settings_widgets()
+        
+        # Bind the close event to finalize logging
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+    def on_closing(self):
+        finalize_logging()
+        self.destroy()
 
     # Toolbar Section
     def create_toolbar(self):
@@ -109,7 +117,7 @@ class MainWindow(ctk.CTk):
             self.tab_buttons = []
             for i, text in enumerate(self.tab_button_texts, start=1):
                 # Set tab button color and size
-                tab_button = ctk.CTkButton(tab_buttons_frame, text=text, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, height=35, command=lambda i=i: self.show_tab(i))  # Increased height
+                tab_button = ctk.CTkButton(tab_buttons_frame, text=text, fg_color="#1f6aa5", hover_color="#1f6aa5", corner_radius=10, height=35, command=lambda i=i: self.show_tab(i))  # Updated color to blue
                 tab_button.pack(side="left", padx=5, pady=5)
                 self.tab_buttons.append(tab_button)
 
@@ -164,21 +172,25 @@ class MainWindow(ctk.CTk):
             settings_content_frame = ctk.CTkFrame(settings_frame, fg_color="#3e3e3e", corner_radius=10)
             settings_content_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-            # Create a custom dropdown for selecting presets or enabled tests with rounded corners
-            self.preset_options = ["Preset 1", "Preset 2", "Enabled Tests"]
-            self.selected_preset = tk.StringVar(value=self.preset_options[0])
+            # Load actual presets from settings
+            settings = load_settings()
+            custom_presets = settings.get("custom_presets", [])
+            self.preset_options = [preset["name"] for preset in custom_presets]
+            self.preset_options.insert(0, "Enabled Tests")  # Add "Enabled Tests" option
+            self.selected_preset = tk.StringVar(value="Enabled Tests")
 
-            # Create a button to show the selected option
-            self.preset_button = ctk.CTkButton(
+            # Create a dropdown for selecting presets
+            self.preset_dropdown = ctk.CTkOptionMenu(
                 self.tabs[1].background_frame, 
-                text=self.selected_preset.get(), 
+                variable=self.selected_preset, 
+                values=self.preset_options, 
                 fg_color="#3e3e3e", 
-                hover_color="#4e4e4e", 
+                button_color="#5e5e5e", 
+                button_hover_color="#4e4e4e", 
                 corner_radius=10, 
-                width=200, 
-                command=self.toggle_dropdown
+                width=200
             )
-            self.preset_button.pack(side="top", fill="x", padx=10, pady=10)
+            self.preset_dropdown.pack(side="top", fill="x", padx=10, pady=10)
 
             # Create a frame to hold the dropdown options
             self.dropdown_frame = ctk.CTkFrame(self.tabs[1].background_frame, fg_color="#3e3e3e", corner_radius=10)
@@ -220,6 +232,16 @@ class MainWindow(ctk.CTk):
             )
             option_button.pack(fill="x", padx=10, pady=5)
 
+    def update_preset_dropdown(self):
+        logger.debug("Updating preset dropdown")
+        settings = load_settings()
+        custom_presets = settings.get("custom_presets", [])
+        preset_names = [preset["name"] for preset in custom_presets]
+        preset_names.insert(0, "Enabled Tests")  # Add "Enabled Tests" option
+        self.preset_dropdown.configure(values=preset_names)
+        self.selected_preset.set("Enabled Tests")
+        logger.debug(f"Preset dropdown updated with values: {preset_names}")
+
     def toggle_dropdown(self):
         if self.dropdown_frame.winfo_ismapped():
             self.dropdown_frame.pack_forget()
@@ -246,6 +268,10 @@ class MainWindow(ctk.CTk):
                 self.tabs[2].background_frame = ctk.CTkFrame(self.tabs[2], fg_color="#2e2e2e", corner_radius=10)
                 self.tabs[2].background_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+            # Load current settings
+            settings = load_settings()
+            enabled_tests = settings.get("enabled_tests", [])
+
             # Create a frame for Computer tests
             computer_frame = ctk.CTkFrame(self.tabs[2].background_frame, fg_color="#2e2e2e", corner_radius=10)
             computer_frame.pack(side="top", fill="x", padx=10, pady=10)
@@ -259,16 +285,23 @@ class MainWindow(ctk.CTk):
             computer_tests_frame.pack(fill="x", padx=10, pady=10)
 
             # Create checkboxes for Computer tests
-            self.computer_test1 = ctk.CTkCheckBox(computer_tests_frame, text="Disk Cleanup", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.computer_test1 = ctk.CTkCheckBox(computer_tests_frame, text="Disk Cleanup", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Disk Cleanup", offvalue="", command=self.save_enabled_tests)
             self.computer_test1.pack(side="left", padx=10, pady=5)
-            self.computer_test2 = ctk.CTkCheckBox(computer_tests_frame, text="Defragment Hard Drive", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.computer_test2 = ctk.CTkCheckBox(computer_tests_frame, text="Defragment Hard Drive", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Defragment Hard Drive", offvalue="", command=self.save_enabled_tests)
             self.computer_test2.pack(side="left", padx=10, pady=5)
-            self.computer_test3 = ctk.CTkCheckBox(computer_tests_frame, text="Check for System File Corruptions", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.computer_test3 = ctk.CTkCheckBox(computer_tests_frame, text="Check for System File Corruptions", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Check for System File Corruptions", offvalue="", command=self.save_enabled_tests)
             self.computer_test3.pack(side="left", padx=10, pady=5)
-            self.computer_test4 = ctk.CTkCheckBox(computer_tests_frame, text="Check Disk for Errors", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.computer_test4 = ctk.CTkCheckBox(computer_tests_frame, text="Check Disk for Errors", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Check Disk for Errors", offvalue="", command=self.save_enabled_tests)
             self.computer_test4.pack(side="left", padx=10, pady=5)
-            self.computer_test5 = ctk.CTkCheckBox(computer_tests_frame, text="Clear Temporary Files", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.computer_test5 = ctk.CTkCheckBox(computer_tests_frame, text="Clear Temporary Files", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Clear Temporary Files", offvalue="", command=self.save_enabled_tests)
             self.computer_test5.pack(side="left", padx=10, pady=5)
+
+            # Set initial state of checkboxes based on settings
+            self.computer_test1.select() if "Disk Cleanup" in enabled_tests else self.computer_test1.deselect()
+            self.computer_test2.select() if "Defragment Hard Drive" in enabled_tests else self.computer_test2.deselect()
+            self.computer_test3.select() if "Check for System File Corruptions" in enabled_tests else self.computer_test3.deselect()
+            self.computer_test4.select() if "Check Disk for Errors" in enabled_tests else self.computer_test4.deselect()
+            self.computer_test5.select() if "Clear Temporary Files" in enabled_tests else self.computer_test5.deselect()
 
             # Create a frame for Network tests
             network_frame = ctk.CTkFrame(self.tabs[2].background_frame, fg_color="#2e2e2e", corner_radius=10)
@@ -283,16 +316,23 @@ class MainWindow(ctk.CTk):
             network_tests_frame.pack(fill="x", padx=10, pady=10)
 
             # Create checkboxes for Network tests
-            self.network_test1 = ctk.CTkCheckBox(network_tests_frame, text="Flush DNS Cache", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.network_test1 = ctk.CTkCheckBox(network_tests_frame, text="Flush DNS Cache", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Flush DNS Cache", offvalue="", command=self.save_enabled_tests)
             self.network_test1.pack(side="left", padx=10, pady=5)
-            self.network_test2 = ctk.CTkCheckBox(network_tests_frame, text="Renew IP Address", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.network_test2 = ctk.CTkCheckBox(network_tests_frame, text="Renew IP Address", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Renew IP Address", offvalue="", command=self.save_enabled_tests)
             self.network_test2.pack(side="left", padx=10, pady=5)
-            self.network_test3 = ctk.CTkCheckBox(network_tests_frame, text="Test Network Speed", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.network_test3 = ctk.CTkCheckBox(network_tests_frame, text="Test Network Speed", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Test Network Speed", offvalue="", command=self.save_enabled_tests)
             self.network_test3.pack(side="left", padx=10, pady=5)
-            self.network_test4 = ctk.CTkCheckBox(network_tests_frame, text="Reset Network Settings", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.network_test4 = ctk.CTkCheckBox(network_tests_frame, text="Reset Network Settings", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Reset Network Settings", offvalue="", command=self.save_enabled_tests)
             self.network_test4.pack(side="left", padx=10, pady=5)
-            self.network_test5 = ctk.CTkCheckBox(network_tests_frame, text="Ping Test", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.network_test5 = ctk.CTkCheckBox(network_tests_frame, text="Ping Test", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Ping Test", offvalue="", command=self.save_enabled_tests)
             self.network_test5.pack(side="left", padx=10, pady=5)
+
+            # Set initial state of checkboxes based on settings
+            self.network_test1.select() if "Flush DNS Cache" in enabled_tests else self.network_test1.deselect()
+            self.network_test2.select() if "Renew IP Address" in enabled_tests else self.network_test2.deselect()
+            self.network_test3.select() if "Test Network Speed" in enabled_tests else self.network_test3.deselect()
+            self.network_test4.select() if "Reset Network Settings" in enabled_tests else self.network_test4.deselect()
+            self.network_test5.select() if "Ping Test" in enabled_tests else self.network_test5.deselect()
 
             # Create a frame for Miscellaneous tests
             misc_frame = ctk.CTkFrame(self.tabs[2].background_frame, fg_color="#2e2e2e", corner_radius=10)
@@ -303,10 +343,41 @@ class MainWindow(ctk.CTk):
             misc_label.pack(fill="x", pady=(10, 0), padx=10)
 
             # Create checkboxes for Miscellaneous tests
-            self.misc_test1 = ctk.CTkCheckBox(misc_frame, text="Monitor Resource Usage", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="blue", offvalue="gray")
+            self.misc_test1 = ctk.CTkCheckBox(misc_frame, text="Monitor Resource Usage", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, onvalue="Monitor Resource Usage", offvalue="", command=self.save_enabled_tests)
             self.misc_test1.pack(fill="x", padx=10, pady=5)
+
+            # Set initial state of checkboxes based on settings
+            self.misc_test1.select() if "Monitor Resource Usage" in enabled_tests else self.misc_test1.deselect()
+
         except Exception as e:
             logger.error(f"Error creating tests widgets: {e}")
+
+    def save_enabled_tests(self):
+        enabled_tests = []
+        if self.computer_test1.get() == "Disk Cleanup":
+            enabled_tests.append("Disk Cleanup")
+        if self.computer_test2.get() == "Defragment Hard Drive":
+            enabled_tests.append("Defragment Hard Drive")
+        if self.computer_test3.get() == "Check for System File Corruptions":
+            enabled_tests.append("Check for System File Corruptions")
+        if self.computer_test4.get() == "Check Disk for Errors":
+            enabled_tests.append("Check Disk for Errors")
+        if self.computer_test5.get() == "Clear Temporary Files":
+            enabled_tests.append("Clear Temporary Files")
+        if self.network_test1.get() == "Flush DNS Cache":
+            enabled_tests.append("Flush DNS Cache")
+        if self.network_test2.get() == "Renew IP Address":
+            enabled_tests.append("Renew IP Address")
+        if self.network_test3.get() == "Test Network Speed":
+            enabled_tests.append("Test Network Speed")
+        if self.network_test4.get() == "Reset Network Settings":
+            enabled_tests.append("Reset Network Settings")
+        if self.network_test5.get() == "Ping Test":
+            enabled_tests.append("Ping Test")
+        if self.misc_test1.get() == "Monitor Resource Usage":
+            enabled_tests.append("Monitor Resource Usage")
+
+        update_settings("enabled_tests", enabled_tests)
             
     def create_presets_widgets(self):
         try:
@@ -315,29 +386,80 @@ class MainWindow(ctk.CTk):
                 self.tabs[3].background_frame = ctk.CTkFrame(self.tabs[3], fg_color="#2e2e2e", corner_radius=10)
                 self.tabs[3].background_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-            # Create a frame for Save Preset
-            save_preset_frame = ctk.CTkFrame(self.tabs[3].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
-            save_preset_frame.pack(side="left", fill="y", padx=10, pady=10)
+            # Load current settings
+            settings = load_settings()
+            custom_presets = settings.get("custom_presets", [])
 
-            # Create a label for Save Preset title
-            save_preset_label = ctk.CTkLabel(save_preset_frame, text="Save Preset", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
-            save_preset_label.pack(fill="x", pady=(10, 0), padx=10)
+            # Create a frame for Save Preset if it doesn't already exist
+            if not hasattr(self, 'save_preset_frame'):
+                self.save_preset_frame = ctk.CTkFrame(self.tabs[3].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
+                self.save_preset_frame.pack(side="left", fill="y", padx=10, pady=10)
 
-            # Create a button to open the naming window
-            save_preset_button = ctk.CTkButton(save_preset_frame, text="Save", command=self.open_naming_window, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
-            save_preset_button.pack(pady=10, padx=10)
+                # Create a label for Save Preset title
+                save_preset_label = ctk.CTkLabel(self.save_preset_frame, text="Save Preset", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                save_preset_label.pack(fill="x", pady=(10, 0), padx=10)
 
-            # Create a frame for Current Presets
-            current_presets_frame = ctk.CTkFrame(self.tabs[3].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
-            current_presets_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+                # Create a button to open the naming window
+                save_preset_button = ctk.CTkButton(self.save_preset_frame, text="Save", command=self.open_naming_window, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
+                save_preset_button.pack(pady=10, padx=10)
 
-            # Create a label for Current Presets title
-            current_presets_label = ctk.CTkLabel(current_presets_frame, text="Current Presets", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
-            current_presets_label.pack(fill="x", pady=(10, 0), padx=10)
+                # Create a label for Delete Preset title
+                delete_preset_label = ctk.CTkLabel(self.save_preset_frame, text="Delete Preset", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                delete_preset_label.pack(fill="x", pady=(10, 0), padx=10)
 
-            # Create a vertical frame for Current Presets content
-            current_presets_content_frame = ctk.CTkFrame(current_presets_frame, fg_color="#3e3e3e", corner_radius=10)
-            current_presets_content_frame.pack(fill="both", expand=True, padx=10, pady=10)
+                # Create a dropdown to select a preset to delete
+                self.delete_preset_var = tk.StringVar(value="Select Preset")
+                self.delete_preset_dropdown = ctk.CTkOptionMenu(self.save_preset_frame, variable=self.delete_preset_var, values=[preset["name"] for preset in custom_presets], fg_color="#3e3e3e", button_color="#5e5e5e", button_hover_color="#4e4e4e", corner_radius=10)
+                self.delete_preset_dropdown.pack(pady=10, padx=10)
+
+                # Create a button to delete the selected preset
+                delete_preset_button = ctk.CTkButton(self.save_preset_frame, text="Delete", command=self.delete_preset, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
+                delete_preset_button.pack(pady=10, padx=10)
+
+                # Create a label for View Preset Details title
+                view_preset_label = ctk.CTkLabel(self.save_preset_frame, text="View Preset Details", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                view_preset_label.pack(fill="x", pady=(10, 0), padx=10)
+
+                # Create a dropdown to select a preset to view details
+                self.view_preset_var = tk.StringVar(value="Select Preset")
+                self.view_preset_dropdown = ctk.CTkOptionMenu(self.save_preset_frame, variable=self.view_preset_var, values=[preset["name"] for preset in custom_presets], fg_color="#3e3e3e", button_color="#5e5e5e", button_hover_color="#4e4e4e", corner_radius=10, command=self.show_preset_details)
+                self.view_preset_dropdown.pack(pady=10, padx=10)
+
+                # Create a frame to display the preset details
+                self.preset_details_frame = ctk.CTkFrame(self.save_preset_frame, fg_color="#3e3e3e", corner_radius=10)
+                self.preset_details_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+                # Add a scrollable text box for preset details
+                self.preset_details_textbox = ctk.CTkTextbox(self.preset_details_frame, state="disabled", wrap="word")
+                self.preset_details_textbox.pack(side="left", fill="both", expand=True, padx=(10, 10), pady=10)
+
+            # Create a frame for Current Presets if it doesn't already exist
+            if not hasattr(self, 'current_presets_frame'):
+                self.current_presets_frame = ctk.CTkFrame(self.tabs[3].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
+                self.current_presets_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+
+                # Create a label for Current Presets title
+                current_presets_label = ctk.CTkLabel(self.current_presets_frame, text="Current Presets", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                current_presets_label.pack(fill="x", pady=(10, 0), padx=10)
+
+                # Create a vertical frame for Current Presets content
+                self.current_presets_content_frame = ctk.CTkFrame(self.current_presets_frame, fg_color="#3e3e3e", corner_radius=10)
+                self.current_presets_content_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            # Clear existing widgets in the current presets content frame
+            for widget in self.current_presets_content_frame.winfo_children():
+                widget.destroy()
+
+            # Display current presets with the number of tests
+            for preset in custom_presets:
+                preset_name = preset.get("name", "Unnamed Preset")
+                num_tests = len(preset.get("tests", []))
+                preset_label = ctk.CTkLabel(self.current_presets_content_frame, text=f"{preset_name} ({num_tests} tests)", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
+                preset_label.pack(fill="x", pady=5, padx=10)
+
+            # Update dropdowns
+            self.update_dropdowns()
+
         except Exception as e:
             logger.error(f"Error creating presets widgets: {e}")
 
@@ -353,14 +475,98 @@ class MainWindow(ctk.CTk):
             name_label.pack(pady=(10, 0), padx=10)
 
             # Create a text box for entering the preset name
-            name_entry = ctk.CTkEntry(self.naming_window, width=250)
-            name_entry.pack(pady=10, padx=10)
+            self.name_entry = ctk.CTkEntry(self.naming_window, width=250)
+            self.name_entry.pack(pady=10, padx=10)
 
             # Create a button to save the preset name and close the window
-            save_button = ctk.CTkButton(self.naming_window, text="Save", command=self.close_naming_window, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
+            save_button = ctk.CTkButton(self.naming_window, text="Save", command=self.save_preset, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
             save_button.pack(pady=10, padx=10)
         else:
             self.naming_window.lift()  # Bring the existing window to the front
+
+    def update_dropdowns(self):
+        settings = load_settings()
+        custom_presets = settings.get("custom_presets", [])
+        preset_names = [preset["name"] for preset in custom_presets]
+
+        self.delete_preset_dropdown.configure(values=preset_names)
+        self.view_preset_dropdown.configure(values=preset_names)
+    
+    def save_preset(self):
+        preset_name = self.name_entry.get()
+        if preset_name:
+            settings = load_settings()
+            custom_presets = settings.get("custom_presets", [])
+            
+            # Get the currently enabled tests
+            enabled_tests = []
+            if self.computer_test1.get() == "Disk Cleanup":
+                enabled_tests.append("Disk Cleanup")
+            if self.computer_test2.get() == "Defragment Hard Drive":
+                enabled_tests.append("Defragment Hard Drive")
+            if self.computer_test3.get() == "Check for System File Corruptions":
+                enabled_tests.append("Check for System File Corruptions")
+            if self.computer_test4.get() == "Check Disk for Errors":
+                enabled_tests.append("Check Disk for Errors")
+            if self.computer_test5.get() == "Clear Temporary Files":
+                enabled_tests.append("Clear Temporary Files")
+            if self.network_test1.get() == "Flush DNS Cache":
+                enabled_tests.append("Flush DNS Cache")
+            if self.network_test2.get() == "Renew IP Address":
+                enabled_tests.append("Renew IP Address")
+            if self.network_test3.get() == "Test Network Speed":
+                enabled_tests.append("Test Network Speed")
+            if self.network_test4.get() == "Reset Network Settings":
+                enabled_tests.append("Reset Network Settings")
+            if self.network_test5.get() == "Ping Test":
+                enabled_tests.append("Ping Test")
+            if self.misc_test1.get() == "Monitor Resource Usage":
+                enabled_tests.append("Monitor Resource Usage")
+
+            # Save the preset with the name and enabled tests
+            custom_presets.append({"name": preset_name, "tests": enabled_tests})
+            update_settings("custom_presets", custom_presets)
+            self.naming_window.destroy()
+            self.naming_window = None
+            self.create_presets_widgets()  # Refresh the presets display
+            self.update_scheduled_presets_dropdown()
+            self.update_preset_dropdown()
+
+    def delete_preset(self):
+        preset_name = self.delete_preset_var.get()
+        if preset_name and preset_name != "Select Preset":
+            settings = load_settings()
+            custom_presets = settings.get("custom_presets", [])
+            scheduled_presets = settings.get("scheduled_presets", [])
+            
+            # Remove the custom preset
+            custom_presets = [preset for preset in custom_presets if preset["name"] != preset_name]
+            
+            # Remove associated scheduled presets
+            scheduled_presets = [preset for preset in scheduled_presets if preset["preset_name"] != preset_name]
+            
+            update_settings("custom_presets", custom_presets)
+            update_settings("scheduled_presets", scheduled_presets)
+            self.create_presets_widgets()  # Refresh the presets display
+            self.create_scheduled_presets_widgets()  # Refresh the scheduled presets display
+            self.update_scheduled_presets_dropdown()
+            self.update_preset_dropdown()
+
+    def show_preset_details(self, preset_name):
+        if preset_name and preset_name != "Select Preset":
+            settings = load_settings()
+            custom_presets = settings.get("custom_presets", [])
+            preset = next((preset for preset in custom_presets if preset["name"] == preset_name), None)
+            if preset:
+                # Clear existing text in the preset details textbox
+                self.preset_details_textbox.configure(state="normal")
+                self.preset_details_textbox.delete("1.0", "end")
+
+                # Display the test names for the selected preset
+                for test in preset.get("tests", []):
+                    self.preset_details_textbox.insert("end", test + "\n")
+
+                self.preset_details_textbox.configure(state="disabled")
 
     def close_naming_window(self):
         if self.naming_window is not None:
@@ -374,94 +580,158 @@ class MainWindow(ctk.CTk):
                 self.tabs[4].background_frame = ctk.CTkFrame(self.tabs[4], fg_color="#2e2e2e", corner_radius=10)
                 self.tabs[4].background_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-            # Create a frame for Save Scheduled Preset
-            save_scheduled_preset_frame = ctk.CTkFrame(self.tabs[4].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
-            save_scheduled_preset_frame.pack(side="left", fill="y", padx=10, pady=10)
+            # Load current settings
+            settings = load_settings()
+            scheduled_presets = settings.get("scheduled_presets", [])
+            custom_presets = settings.get("custom_presets", [])
 
-            # Create a label for Save Scheduled Preset title
-            save_scheduled_preset_label = ctk.CTkLabel(save_scheduled_preset_frame, text="Save Scheduled Preset", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
-            save_scheduled_preset_label.pack(fill="x", pady=(10, 0), padx=10)
+            # Create a frame for Save Scheduled Preset if it doesn't already exist
+            if not hasattr(self, 'save_scheduled_preset_frame'):
+                self.save_scheduled_preset_frame = ctk.CTkFrame(self.tabs[4].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
+                self.save_scheduled_preset_frame.pack(side="left", fill="y", padx=10, pady=10)
 
-            # Create a dropdown for selecting a preset to schedule
-            preset_options = ["Preset 1", "Preset 2", "Preset 3"]  # Example options, replace with actual presets
-            self.selected_preset = tk.StringVar(value=preset_options[0])
-            preset_dropdown = ctk.CTkOptionMenu(
-                save_scheduled_preset_frame, 
-                variable=self.selected_preset, 
-                values=preset_options, 
-                fg_color="#3e3e3e", 
-                button_color="#5e5e5e", 
-                button_hover_color="#4e4e4e", 
-                corner_radius=10, 
-                width=200
-            )
-            preset_dropdown.pack(pady=10, padx=10)
+                # Create a label for Save Scheduled Preset title
+                save_scheduled_preset_label = ctk.CTkLabel(self.save_scheduled_preset_frame, text="Save Scheduled Preset", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                save_scheduled_preset_label.pack(fill="x", pady=(10, 0), padx=10)
 
-            # Create a dropdown for selecting time frequency
-            time_frequency_options = ["Daily", "Weekly", "Monthly"]
-            self.selected_time_frequency = tk.StringVar(value=time_frequency_options[0])
-            time_frequency_dropdown = ctk.CTkOptionMenu(
-                save_scheduled_preset_frame, 
-                variable=self.selected_time_frequency, 
-                values=time_frequency_options, 
-                fg_color="#3e3e3e", 
-                button_color="#5e5e5e", 
-                button_hover_color="#4e4e4e", 
-                corner_radius=10, 
-                width=200
-            )
-            time_frequency_dropdown.pack(pady=10, padx=10)
+                # Create a dropdown for selecting a preset to schedule
+                self.selected_preset = tk.StringVar(value=custom_presets[0]["name"] if custom_presets else "")
+                self.preset_dropdown = ctk.CTkOptionMenu(
+                    self.save_scheduled_preset_frame, 
+                    variable=self.selected_preset, 
+                    values=[preset["name"] for preset in custom_presets], 
+                    fg_color="#3e3e3e", 
+                    button_color="#5e5e5e", 
+                    button_hover_color="#4e4e4e", 
+                    corner_radius=10, 
+                    width=200
+                )
+                self.preset_dropdown.pack(pady=10, padx=10)
 
-            # Create text boxes for hours and minutes
-            hours_label = ctk.CTkLabel(save_scheduled_preset_frame, text="Hours:", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
-            hours_label.pack(pady=(10, 0), padx=10)
-            self.hours_entry = ctk.CTkEntry(save_scheduled_preset_frame, width=200)
-            self.hours_entry.pack(pady=10, padx=10)
-            self.hours_entry.configure(validate="key", validatecommand=(self.register(self.validate_hours), '%P'))
+                # Create a dropdown for selecting time frequency
+                time_frequency_options = ["Daily", "Weekly", "Monthly"]
+                self.selected_time_frequency = tk.StringVar(value=time_frequency_options[0])
+                time_frequency_dropdown = ctk.CTkOptionMenu(
+                    self.save_scheduled_preset_frame, 
+                    variable=self.selected_time_frequency, 
+                    values=time_frequency_options, 
+                    fg_color="#3e3e3e", 
+                    button_color="#5e5e5e", 
+                    button_hover_color="#4e4e4e", 
+                    corner_radius=10, 
+                    width=200
+                )
+                time_frequency_dropdown.pack(pady=10, padx=10)
 
-            minutes_label = ctk.CTkLabel(save_scheduled_preset_frame, text="Minutes:", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
-            minutes_label.pack(pady=(10, 0), padx=10)
-            self.minutes_entry = ctk.CTkEntry(save_scheduled_preset_frame, width=200)
-            self.minutes_entry.pack(pady=10, padx=10)
-            self.minutes_entry.configure(validate="key", validatecommand=(self.register(self.validate_minutes), '%P'))
+                # Create a frame for hours and minutes entry
+                time_entry_frame = ctk.CTkFrame(self.save_scheduled_preset_frame, fg_color="#2e2e2e", corner_radius=10)
+                time_entry_frame.pack(fill="x", padx=10, pady=10)
 
-            # Create a checkbox for saving a summary
-            save_summary_checkbox = ctk.CTkCheckBox(save_scheduled_preset_frame, text="Save Summary", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
-            save_summary_checkbox.pack(pady=10, padx=10)
+                # Create text boxes for hours and minutes
+                hours_label = ctk.CTkLabel(time_entry_frame, text="Hours:", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
+                hours_label.pack(side="left", padx=(0, 5))
+                self.hours_entry = ctk.CTkEntry(time_entry_frame, width=90)
+                self.hours_entry.pack(side="left", padx=(0, 10))
+                self.hours_entry.configure(validate="key", validatecommand=(self.register(self.validate_hours), '%P'))
 
-            # Create a button to save the scheduled preset
-            save_scheduled_preset_button = ctk.CTkButton(save_scheduled_preset_frame, text="Save", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
-            save_scheduled_preset_button.pack(pady=10, padx=10)
+                minutes_label = ctk.CTkLabel(time_entry_frame, text="Minutes:", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
+                minutes_label.pack(side="left", padx=(10, 5))
+                self.minutes_entry = ctk.CTkEntry(time_entry_frame, width=90)
+                self.minutes_entry.pack(side="left", padx=(0, 10))
+                self.minutes_entry.configure(validate="key", validatecommand=(self.register(self.validate_minutes), '%P'))
 
-            # Create a frame for Scheduled Presets
-            scheduled_presets_frame = ctk.CTkFrame(self.tabs[4].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
-            scheduled_presets_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+                # Create a checkbox for saving a summary
+                save_summary_checkbox = ctk.CTkCheckBox(self.save_scheduled_preset_frame, text="Save Summary", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
+                save_summary_checkbox.pack(pady=10, padx=10)
 
-            # Create a label for Scheduled Presets title
-            scheduled_presets_label = ctk.CTkLabel(scheduled_presets_frame, text="Scheduled Presets", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
-            scheduled_presets_label.pack(fill="x", pady=(10, 0), padx=10)
+                # Create a button to save the scheduled preset
+                save_scheduled_preset_button = ctk.CTkButton(self.save_scheduled_preset_frame, text="Save", command=self.save_scheduled_preset, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, width=200)
+                save_scheduled_preset_button.pack(pady=10, padx=10)
 
-            # Create a vertical frame for Scheduled Presets content
-            scheduled_presets_content_frame = ctk.CTkFrame(scheduled_presets_frame, fg_color="#3e3e3e", corner_radius=10)
-            scheduled_presets_content_frame.pack(fill="both", expand=True, padx=10, pady=10)
+                # Create a label for Delete Scheduled Preset title
+                delete_scheduled_preset_label = ctk.CTkLabel(self.save_scheduled_preset_frame, text="Delete Scheduled Preset", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                delete_scheduled_preset_label.pack(fill="x", pady=(10, 0), padx=10)
+
+                # Create a dropdown to select a scheduled preset to delete
+                self.delete_scheduled_preset_var = tk.StringVar(value="Select Scheduled Preset")
+                self.delete_scheduled_preset_dropdown = ctk.CTkOptionMenu(self.save_scheduled_preset_frame, variable=self.delete_scheduled_preset_var, values=[f"{preset['preset_name']} - {preset['frequency']} at {preset['hours']}:{preset['minutes']}" for preset in scheduled_presets], fg_color="#3e3e3e", button_color="#5e5e5e", button_hover_color="#4e4e4e", corner_radius=10, width=200)
+                self.delete_scheduled_preset_dropdown.pack(pady=10, padx=10)
+
+                # Create a button to delete the selected scheduled preset
+                delete_scheduled_preset_button = ctk.CTkButton(self.save_scheduled_preset_frame, text="Delete", command=self.delete_scheduled_preset, fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, width=200)
+                delete_scheduled_preset_button.pack(pady=10, padx=10)
+
+            # Create a frame for Scheduled Presets if it doesn't already exist
+            if not hasattr(self, 'scheduled_presets_frame'):
+                self.scheduled_presets_frame = ctk.CTkFrame(self.tabs[4].background_frame, fg_color="#2e2e2e", corner_radius=10, width=200)
+                self.scheduled_presets_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+
+                # Create a label for Scheduled Presets title
+                scheduled_presets_label = ctk.CTkLabel(self.scheduled_presets_frame, text="Scheduled Presets", font=("Arial", 16, "bold"), fg_color="#3e3e3e", corner_radius=10)
+                scheduled_presets_label.pack(fill="x", pady=(10, 0), padx=10)
+
+                # Create a vertical frame for Scheduled Presets content
+                self.scheduled_presets_content_frame = ctk.CTkFrame(self.scheduled_presets_frame, fg_color="#3e3e3e", corner_radius=10)
+                self.scheduled_presets_content_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            # Clear existing widgets in the scheduled presets content frame
+            for widget in self.scheduled_presets_content_frame.winfo_children():
+                widget.destroy()
+
+            # Display scheduled presets
+            for scheduled_preset in scheduled_presets:
+                preset_name = scheduled_preset.get("preset_name", "Unnamed Preset")
+                frequency = scheduled_preset.get("frequency", "Unknown Frequency")
+                time = f"{scheduled_preset.get('hours', '00')}:{scheduled_preset.get('minutes', '00')}"
+                scheduled_preset_label = ctk.CTkLabel(self.scheduled_presets_content_frame, text=f"{preset_name} - {frequency} at {time}", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
+                scheduled_preset_label.pack(fill="x", pady=5, padx=10)
+
+            # Update dropdowns
+            self.update_scheduled_presets_dropdown()
+
         except Exception as e:
             logger.error(f"Error creating scheduled presets widgets: {e}")
 
-    def validate_hours(self, value_if_allowed):
-        if value_if_allowed.isdigit() and 0 <= int(value_if_allowed) <= 24:
-            return True
-        elif value_if_allowed == "":
-            return True
-        else:
-            return False
+    def update_scheduled_presets_dropdown(self):
+        settings = load_settings()
+        custom_presets = settings.get("custom_presets", [])
+        scheduled_presets = settings.get("scheduled_presets", [])
+        preset_names = [preset["name"] for preset in custom_presets]
+        scheduled_preset_names = [f"{preset['preset_name']} - {preset['frequency']} at {preset['hours']}:{preset['minutes']}" for preset in scheduled_presets]
 
-    def validate_minutes(self, value_if_allowed):
-        if value_if_allowed.isdigit() and 0 <= int(value_if_allowed) <= 59:
-            return True
-        elif value_if_allowed == "":
-            return True
-        else:
-            return False
+        self.preset_dropdown.configure(values=preset_names)
+        self.delete_scheduled_preset_dropdown.configure(values=scheduled_preset_names)
+
+    def save_scheduled_preset(self):
+        preset_name = self.selected_preset.get()
+        frequency = self.selected_time_frequency.get()
+        hours = self.hours_entry.get()
+        minutes = self.minutes_entry.get()
+
+        if preset_name and frequency and hours.isdigit() and minutes.isdigit():
+            settings = load_settings()
+            scheduled_presets = settings.get("scheduled_presets", [])
+            
+            # Save the scheduled preset
+            scheduled_presets.append({
+                "preset_name": preset_name,
+                "frequency": frequency,
+                "hours": hours,
+                "minutes": minutes
+            })
+            update_settings("scheduled_presets", scheduled_presets)
+            self.update_scheduled_presets_dropdown()  # Update the dropdowns immediately
+            self.create_scheduled_presets_widgets()  # Refresh the scheduled presets display
+
+    def delete_scheduled_preset(self):
+        scheduled_preset_name = self.delete_scheduled_preset_var.get()
+        if scheduled_preset_name and scheduled_preset_name != "Select Scheduled Preset":
+            settings = load_settings()
+            scheduled_presets = settings.get("scheduled_presets", [])
+            scheduled_presets = [preset for preset in scheduled_presets if f"{preset['preset_name']} - {preset['frequency']} at {preset['hours']}:{preset['minutes']}" != scheduled_preset_name]
+            update_settings("scheduled_presets", scheduled_presets)
+            self.update_scheduled_presets_dropdown()  # Update the dropdowns immediately
+            self.create_scheduled_presets_widgets()  # Refresh the scheduled presets display
 
     def validate_hours(self, value_if_allowed):
         if value_if_allowed.isdigit() and 0 <= int(value_if_allowed) <= 24:
@@ -487,6 +757,12 @@ class MainWindow(ctk.CTk):
                 self.tabs[5].background_frame = ctk.CTkFrame(self.tabs[5], fg_color="#2e2e2e", corner_radius=10)
                 self.tabs[5].background_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+            # Load current settings
+            settings = load_settings()
+            logging_level = settings.get("settings", {}).get("logging_level", "DEBUG")
+            save_logs = settings.get("settings", {}).get("save_logs", False)
+            save_summaries = settings.get("settings", {}).get("save_summaries", False)
+
             # Create a frame for Logging Level
             logging_level_frame = ctk.CTkFrame(self.tabs[5].background_frame, fg_color="#2e2e2e", corner_radius=10)
             logging_level_frame.pack(side="top", fill="x", padx=10, pady=10)
@@ -499,17 +775,24 @@ class MainWindow(ctk.CTk):
             self.logging_level_slider = ctk.CTkSlider(logging_level_frame, from_=0, to=4, number_of_steps=4, command=self.update_logging_level)
             self.logging_level_slider.pack(fill="x", padx=10, pady=10)
 
+            # Set the initial value of the slider based on the loaded settings
+            levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+            self.logging_level_slider.set(levels.index(logging_level))
+
             # Create a label to display the current logging level
-            self.logging_level_display = ctk.CTkLabel(logging_level_frame, text="DEBUG", font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
+            self.logging_level_display = ctk.CTkLabel(logging_level_frame, text=logging_level, font=("Arial", 12), fg_color="#3e3e3e", corner_radius=10)
             self.logging_level_display.pack(fill="x", padx=10, pady=10)
 
             # Create a checkbox for enabling saved logs
-            self.enable_saved_logs_checkbox = ctk.CTkCheckBox(self.tabs[5].background_frame, text="Enable Saved Logs", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
+            self.enable_saved_logs_checkbox = ctk.CTkCheckBox(self.tabs[5].background_frame, text="Enable Saved Logs", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, command=self.toggle_save_logs)
             self.enable_saved_logs_checkbox.pack(pady=10, padx=10)
+            self.enable_saved_logs_checkbox.select() if save_logs else self.enable_saved_logs_checkbox.deselect()
 
             # Create a checkbox for saving summaries
-            self.enable_save_summary_checkbox = ctk.CTkCheckBox(self.tabs[5].background_frame, text="Enable Save Summary", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10)
+            self.enable_save_summary_checkbox = ctk.CTkCheckBox(self.tabs[5].background_frame, text="Enable Save Summary", fg_color="#5e5e5e", hover_color="#4e4e4e", corner_radius=10, command=self.toggle_save_summaries)
             self.enable_save_summary_checkbox.pack(pady=10, padx=10)
+            self.enable_save_summary_checkbox.select() if save_summaries else self.enable_save_summary_checkbox.deselect()
+
         except Exception as e:
             logger.error(f"Error creating settings widgets: {e}")
 
@@ -518,6 +801,15 @@ class MainWindow(ctk.CTk):
         level = levels[int(value)]
         self.logging_level_display.configure(text=level)
         logger.setLevel(getattr(logging, level))
+        update_settings("settings.logging_level", level)
+
+    def toggle_save_logs(self):
+        save_logs = self.enable_saved_logs_checkbox.get()
+        update_settings("settings.save_logs", save_logs)
+
+    def toggle_save_summaries(self):
+        save_summaries = self.enable_save_summary_checkbox.get()
+        update_settings("settings.save_summaries", save_summaries)
 
 
 if __name__ == "__main__":

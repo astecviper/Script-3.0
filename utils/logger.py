@@ -2,6 +2,7 @@
 import logging
 import os
 import json
+import atexit
 from datetime import datetime
 
 # Create Logs directory if it doesn't exist
@@ -58,6 +59,7 @@ def close_log_handlers():
     for handler in logger.handlers[:]:
         handler.close()
         logger.removeHandler(handler)
+    print("All log handlers have been closed.")
 
 def finalize_logging():
     settings_file = 'settings.json'
@@ -73,15 +75,21 @@ def finalize_logging():
     close_log_handlers()
 
     # Check if saving logs is enabled
-    if save_logs:
+    if not save_logs:
+        try:
+            if os.path.exists(log_file):
+                os.remove(log_file)
+                print("Log file deleted successfully.")
+        except Exception as e:
+            print(f"Error deleting log file: {e}")
+    else:
         timestamp = datetime.now().strftime("%m-%d-%Y - %H-%M-%S")
         new_log_file = os.path.join(log_dir, f"Aztec's Speed-Up & Clean-Up [{timestamp}].log")
         print(f"Renaming log file to: {new_log_file}")
         os.rename(log_file, new_log_file)
-    else:
-        print(f"Deleting log file: {log_file}")
-        if os.path.exists(log_file):
-            os.remove(log_file)
+
+# Register finalize_logging to be called at program exit
+atexit.register(finalize_logging)
 
 # Test the logger
 if __name__ == "__main__":
